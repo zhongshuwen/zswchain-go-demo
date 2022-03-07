@@ -8,7 +8,7 @@ https://chaindocs.zhongshuwen.com/docs/intro
 ```bash
 git clone https://github.com/zhongshuwen/zswchain-go-demo
 cd zswchain-go-demo
-go get -u github.com/zhongshuwen/zswchain-go@1.1.0
+go get -u github.com/zhongshuwen/zswchain-go@v1.1.0
 cp ./.env.example.sh ./.env.sh
 ```
 ### 3. 编辑.env.sh
