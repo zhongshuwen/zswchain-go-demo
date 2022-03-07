@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	zsw "github.com/zhongshuwen/zswchain-go"
 	zswhq "github.com/zhongshuwen/zswchain-go/system"
@@ -68,22 +69,51 @@ func UuidToUint128OrQuit(uuidString string) zsw.Uint128 {
 	return x
 
 }
+
+type ItemBalanceTableRow struct {
+	ItemId           uint64 `json:"item_id"`
+	Status           uint32 `json:"status"`
+	Balance          uint64 `json:"balance"`
+	BalanceInCustody uint64 `json:"balance_in_custody"`
+	BalanceFrozen    uint64 `json:"balance_frozen"`
+}
+
+func QueryUserCangpin(ctx context.Context, api *zsw.API, account zsw.AccountName) (out *[]ItemBalanceTableRow, errOut error) {
+	var rowReq = zsw.GetTableRowsRequest{
+		Code:       "zsw.items",
+		Scope:      string(account),
+		Table:      "itembalances",
+		LowerBound: "", //use this to paginate with the last result's id
+		Limit:      10, //results to fetch
+		JSON:       true,
+	}
+	var resp, err = api.GetTableRows(ctx, rowReq)
+	if err != nil {
+		errOut = err
+		return
+	}
+	var x []ItemBalanceTableRow
+	resp.JSONToStructs(&x)
+	return &x, nil
+
+}
 func main() {
 
 	var zswContentReviewTeamWalletName = zsw.AccountName("zsw.admin")
 
-	var kexinJiedianAZhongShuWenUuid = "017f64cd-29e2-4957-b3ba-bd094e8ed233"
-	var kexinJiedianAWalletName = zsw.AccountName("kxjdtest111a")
+	var kexinJiedianAZhongShuWenUuid = "8d65e6d7-30dd-4fa6-896e-6cd04ffe6512"
+	var kexinJiedianAWalletName = zsw.AccountName("kxjdtest222a")
 
 	//var userAZhongShuWenUuid = "017f5d8a-f70d-4602-b85f-b24751953e4d"
-	var userAWalletName = zsw.AccountName("usertest111a")
+	var userAWalletName = zsw.AccountName("usertest222a")
 
 	//var userBZhongShuWenUuid = "017f5d8a-f6f3-4594-833c-9a877e7af54b"
-	var userBWalletName = zsw.AccountName("usertest111b")
+	var userBWalletName = zsw.AccountName("usertest222b")
 
-	var collectionAUuid = "017a57ed-9dd4-42e1-aed4-0a8ced8a96d3"
-	var itemA1Uuid = "017a57ed-b963-401e-9c2b-288a9dce6206"
-	var itemA2Uuid = "017a57ed-b963-401e-9c2b-288a9dce6206"
+	var collectionAUuid = "a8358926-97a5-4fc2-889f-bce6f0bf6f13"
+
+	var itemA1Uuid = "045cc79d-98e9-4b03-964b-e75608d1d01a"
+	var itemA2Uuid = "a855db4e-f641-4691-94ab-bdcc5a832c16"
 
 	api := zsw.New("http://localhost:3031")
 
@@ -108,6 +138,8 @@ func main() {
 		"missing USER_B_PRIVATE_KEY",
 	)
 
+	api.SetSigner(keyBag)
+
 	var publicKeys, err = keyBag.AvailableKeys(context.Background())
 	NoError(err, "Error getting public keys!")
 
@@ -115,8 +147,6 @@ func main() {
 	var kexinJiedianAPublicKey = publicKeys[1]
 	var userAPublicKey = publicKeys[2]
 	var userBPublicKey = publicKeys[3]
-
-	api.SetSigner(keyBag)
 
 	fmt.Println("创建可信节点账号...")
 	runTxBasic(context.Background(), api, []*zsw.Action{
@@ -127,10 +157,23 @@ func main() {
 			kexinJiedianAWalletName,        //可信节点联盟链账号
 			kexinJiedianAPublicKey,         //可信节点公钥
 		),
+		zswhq.NewBuyRAMBytes(
+			zswContentReviewTeamWalletName, //需要中数文签名
+			kexinJiedianAWalletName,
+			500000,
+		),
+		zswhq.NewDelegateBW(
+			zswContentReviewTeamWalletName, //需要中数文签名
+			kexinJiedianAWalletName,
+			zsw.NewZSWAsset(100000000),
+			zsw.NewZSWAsset(100000),
+			true,
+		),
 		// 给可信节点Minting权限
 		zswperms.NewSetZswPerms(
 			zswContentReviewTeamWalletName, //中数文的内容审核管理账号
 			kexinJiedianAWalletName,        //可信节点联盟链账号
+			"zsw.prmcore",                  //core permissions scope
 			zsw.NewUint128FromUint64(
 				uint64(zsw.ZSW_CORE_PERMS_CONFIRM_AUTHORIZE_USER_TX)| // 此权限赋予客户用户授权交易的权力
 					uint64(zsw.ZSW_CORE_PERMS_CONFIRM_AUTHORIZE_USER_TRANSFER_ITEM), //允许可信节点赋予C2C基本数字藏品转移
@@ -174,107 +217,86 @@ func main() {
 			userAWalletName,                //用户A联盟链账号
 			userAPublicKey,                 //用户A联盟链公钥
 		),
+
+		zswhq.NewBuyRAMBytes(
+			zswContentReviewTeamWalletName, //需要中数文签名
+			userAWalletName,
+			3000, // 创建用户需要3000bytes
+		),
 		// 创建用户B账号
 		zswhq.NewNewAccount(
 			zswContentReviewTeamWalletName, //中数文的内容审核管理账号
 			userBWalletName,                //用户A联盟链账号
 			userBPublicKey,                 //用户A联盟链公钥
 		),
-	})
-	fmt.Println("登记新版税接受者（%s）+ 开通“平台发行方”类权限", kexinJiedianAWalletName)
-	runTxBasic(context.Background(), api, []*zsw.Action{
-		zswitems.NewMakeRoyaltyUser( //登记谁是版税接受者
-			zswContentReviewTeamWalletName,
-			kexinJiedianAWalletName,
-			UuidToUint128OrQuit(kexinJiedianAZhongShuWenUuid),
-			zsw.NewUint128FromUint64(0),
-			0,
+
+		zswhq.NewBuyRAMBytes(
+			zswContentReviewTeamWalletName, //需要中数文签名
+			userBWalletName,
+			3000, // 创建用户需要3000bytes
 		),
 	})
+
 	fmt.Println("登记版税接受者", kexinJiedianAWalletName)
 	runTxBasic(context.Background(), api, []*zsw.Action{
 		zswitems.NewMakeRoyaltyUser( //登记谁是版税接受者
-			zswContentReviewTeamWalletName,
+			zswContentReviewTeamWalletName, //需要中数文签名
 			kexinJiedianAWalletName,
 			UuidToUint128OrQuit(kexinJiedianAZhongShuWenUuid),
 			zsw.NewUint128FromUint64(0),
 			0,
 		),
 	})
-	fmt.Println("创建新的Collection", kexinJiedianAWalletName)
+	time.Sleep(3 * time.Second) // 等几个block确认
+	fmt.Println("创建新的Collection, 2个Item模版，mint数字藏品，转移数字藏品")
 	runTxBasic(context.Background(), api, []*zsw.Action{
 		zswitems.NewMakeCollection( //登记谁是版税接受者
-			zswContentReviewTeamWalletName,
-			kexinJiedianAWalletName,
-			kexinJiedianAWalletName,
-			UuidToUint128OrQuit(collectionAUuid).GetTypeACode(),
-			UuidToUint128OrQuit(collectionAUuid).GetTypeBCode(),
+			zswContentReviewTeamWalletName,                      //需要中数文签名
+			kexinJiedianAWalletName,                             //creator
+			kexinJiedianAWalletName,                             //issuing 平台
+			UuidToUint128OrQuit(collectionAUuid).GetTypeACode(), //UuidToUint128OrQuit(collectionAUuid).GetTypeBCode(),
+			UuidToUint128OrQuit(collectionAUuid).GetTypeBCode(), //UuidToUint128OrQuit(collectionAUuid).GetTypeACode(),
 			1,   // 正常 == 1
 			11,  // 正常 == 11
 			350, // 一级市场分润：10000分之多少，比如350==3.5%，525==5.25%， 900==9%，等
 			525, // 二级市场分润：10000分之多少，比如350==3.5%，525==5.25%， 900==9%，等
 			"",  //链上metadata schema name, 未来会支持
 			"https://metadata.demo.zhongshuwen.com/metadata/collections/my-metadata.json", //collection metadata url
-			kexinJiedianAWalletName, //royalty receiver，链上记录为了透明化
-			[]zsw.AccountName{},     // notify账号/合约（为了历史或者你们内部系统方便）
-			zsw.ZswItemsMetadata{},  //目前不支持链上metadata，很快会出方案
-		),
-	})
-	fmt.Println("创建Collection与两个数字藏品模版", kexinJiedianAWalletName)
-	runTxBasic(context.Background(), api, []*zsw.Action{
-		zswitems.NewMakeCollection( //创建新的collection
-			zswContentReviewTeamWalletName,
-			kexinJiedianAWalletName,                             //创建者
-			kexinJiedianAWalletName,                             //平台Issuer
-			UuidToUint128OrQuit(collectionAUuid).GetTypeACode(), // API获取的Collecion UUID的A类码
-			UuidToUint128OrQuit(collectionAUuid).GetTypeBCode(), // API获取的Collecion UUID的B类码
-			1,   // 正常 == 1
-			9,   // 正常 == 9 (ITEM_CONFIG_TRANSFERABLE | ITEM_CONFIG_ALLOW_NOTIFY)
-			350, // 一级市场分润：10000分之多少，比如350==3.5%，525==5.25%， 900==9%，等
-			525, // 二级市场分润：10000分之多少，比如350==3.5%，525==5.25%， 900==9%，等
-			"",  //链上metadata schema name, 未来会支持
-			"https://metadata.demo.zhongshuwen.com/metadata/collections/my-metadata.json", //collection metadata url
-			kexinJiedianAWalletName, //royalty receiver，链上记录为了透明化
-			[]zsw.AccountName{},     // notify账号/合约（为了历史或者你们内部系统方便）
-			zsw.ZswItemsMetadata{},  //目前不支持链上metadata，很快会出方案
+			kexinJiedianAWalletName,                    //royalty receiver，链上记录为了透明化
+			[]zsw.AccountName{kexinJiedianAWalletName}, // notify账号/合约（为了历史或者你们内部系统方便）
+			zsw.ZswItemsMetadata{},                     //目前不支持链上metadata，很快会出方案
 		),
 		zswitems.NewMakeItem(
-			zswContentReviewTeamWalletName,
+			zswContentReviewTeamWalletName,               //需要中数文签名
 			kexinJiedianAWalletName,                      //创建者
 			kexinJiedianAWalletName,                      //平台Issuer
 			UuidToUint128OrQuit(itemA1Uuid).Get40BitId(), //api获取的item metadata uuid
 			UuidToUint128OrQuit(itemA1Uuid),              //api获取的item metadata uuid
-			1,                                            // 正常 == 1
 			9,                                            // 正常 == 9 (ITEM_CONFIG_TRANSFERABLE | ITEM_CONFIG_ALLOW_NOTIFY)
-
-			UuidToUint128OrQuit(collectionAUuid).GetTypeACode(), // API获取的Collecion UUID的A类码
+			UuidToUint128OrQuit(collectionAUuid).GetTypeACode(), //collection A类码
 			5000, //供应上限=5000
+			1,    //类型（1=图片）
 			"https://metadata.demo.zhongshuwen.com/metadata/items/1.json", //item metadata url
 			"",                     //custom链上metadata schema，未来会支持
 			zsw.ZswItemsMetadata{}, //定制链上metadata，未来会支持
 
 		),
-		zswitems.NewMakeItem(
-			zswContentReviewTeamWalletName,
+		zswitems.NewMakeItem( //make A2数字藏品模版
+			zswContentReviewTeamWalletName,               //需要中数文签名
 			kexinJiedianAWalletName,                      //创建者
 			kexinJiedianAWalletName,                      //平台Issuer
 			UuidToUint128OrQuit(itemA2Uuid).Get40BitId(), //api获取的item metadata uuid
 			UuidToUint128OrQuit(itemA2Uuid),              //api获取的item metadata uuid
-			1,                                            // 正常 == 1
 			9,                                            // 正常 == 9 (ITEM_CONFIG_TRANSFERABLE | ITEM_CONFIG_ALLOW_NOTIFY)
-
-			UuidToUint128OrQuit(collectionAUuid).GetTypeACode(), // API获取的Collecion UUID的A类码
-			300000, //供应上限=300000
-			"https://metadata.demo.zhongshuwen.com/metadata/items/2.json", //collection metadata url
+			UuidToUint128OrQuit(collectionAUuid).GetTypeACode(), //collection A类码
+			3000, //供应上限=3000
+			1,    //类型（1=图片）
+			"https://metadata.demo.zhongshuwen.com/metadata/items/2.json", //item metadata url
 			"",                     //custom链上metadata schema，未来会支持
 			zsw.ZswItemsMetadata{}, //定制链上metadata，未来会支持
 
 		),
-	})
-
-	fmt.Println("mint数字藏品给用户A", kexinJiedianAWalletName)
-	runTxBasic(context.Background(), api, []*zsw.Action{
-		zswitems.NewItemMint( //创建新的collection
+		zswitems.NewItemMint( //mint数字藏品
 			kexinJiedianAWalletName, // minter/平台Issuer
 			userAWalletName,         // receiver
 			kexinJiedianAWalletName, //custodian，如果是用户自己用："nullnullnull"
@@ -284,7 +306,33 @@ func main() {
 			[]uint64{UuidToUint128OrQuit(itemA1Uuid).Get40BitId(), UuidToUint128OrQuit(itemA2Uuid).Get40BitId()}, //数字藏品ids
 			[]uint64{52, 95}, //量
 
-			"memo string", //memo
+			"感谢你购买这数字藏品!", //memo
+		),
+		zswitems.NewItemTransfer( //转移
+			kexinJiedianAWalletName, //authorizer
+			userAWalletName,         //发
+			userBWalletName,         //收
+			kexinJiedianAWalletName, //从custodian
+			kexinJiedianAWalletName, //到custodian
+			0,                       // T+X秒 （用户得到藏品之后需要等多少秒才可以转移/交易）
+			false,                   // include liquid non custodial funds （nullnullnull）
+			10,                      //多少unfreeze iterations，10平时OK了
+			[]uint64{UuidToUint128OrQuit(itemA1Uuid).Get40BitId(), UuidToUint128OrQuit(itemA2Uuid).Get40BitId()}, //数字藏品ids
+			[]uint64{8, 2}, //量
+			"送你个好藏品",       //memo
 		),
 	})
+	time.Sleep(2 * time.Second)
+
+	var respUa, errUa = QueryUserCangpin(context.Background(), api, userAWalletName)
+	NoError(errUa, "error getting userA 藏品")
+	userAResp, errUaMarshal := json.Marshal(*respUa)
+	NoError(errUaMarshal, "error marshalling the response back to json （userA）")
+	fmt.Printf("user A 藏品：%s \n", string(userAResp))
+
+	var respUb, errUb = QueryUserCangpin(context.Background(), api, userBWalletName)
+	NoError(errUb, "error getting userB 藏品")
+	userBResp, errUbMarshal := json.Marshal(*respUb)
+	NoError(errUbMarshal, "error marshalling the response back to json （userA）")
+	fmt.Printf("user B 藏品：%s \n", string(userBResp))
 }
