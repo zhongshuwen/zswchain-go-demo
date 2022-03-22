@@ -3,9 +3,12 @@ module github.com/zhongshuwen/zswchain-go-demo
 go 1.15
 
 require (
+	github.com/google/uuid v1.3.0
 	github.com/streamingfast/logging v0.0.0-20220304214715-bc750a74b424 // indirect
 	github.com/tidwall/gjson v1.14.0 // indirect
-	github.com/zhongshuwen/zswchain-go v1.9.5
+	github.com/urfave/cli/v2 v2.4.0
+	github.com/zhongshuwen/gmsm v1.7.0
+	github.com/zhongshuwen/zswchain-go v1.12.8
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
