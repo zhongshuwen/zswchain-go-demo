@@ -38,28 +38,28 @@ func QueryUserCangpin(ctx context.Context, api *zsw.API, account zsw.AccountName
 
 }
 func GetCreateExampleCollection(authorizer zsw.AccountName, kexinJiedian zsw.AccountName, collectionZswId string) []*zsw.Action {
-	collectionSchemaName := zsw.Name("v1collection")
+	collectionSchemaName := zsw.Name(RandomLowercaseStringAZ(12)) //zsw.Name("v1collection")
 
 	itemMode := zsw.ITEM_CONFIG_ALLOW_MUTABLE_DATA |
 		zsw.ITEM_CONFIG_ALLOW_NOTIFY |
 		zsw.ITEM_CONFIG_TRANSFERABLE
 
 	return []*zsw.Action{
-		/*
-			zswitems.NewMakeSchema(
-				authorizer,
-				kexinJiedian,
-				collectionSchemaName,
-				[]zsw.FieldDef{
-					{Name: "name", Type: "string"},
-					{Name: "description", Type: "string"},
-					{Name: "logo_url", Type: "string"},
-					{Name: "website", Type: "string"},
-					{Name: "banner_url", Type: "string"},
-					{Name: "icon_url", Type: "string"},
-				},
-			),
-		*/
+
+		zswitems.NewMakeSchema(
+			authorizer,
+			kexinJiedian,
+			collectionSchemaName,
+			[]zsw.FieldDef{
+				{Name: "name", Type: "string"},
+				{Name: "description", Type: "string"},
+				{Name: "logo_url", Type: "string"},
+				{Name: "website", Type: "string"},
+				{Name: "banner_url", Type: "string"},
+				{Name: "icon_url", Type: "string"},
+			},
+		),
+
 		zswitems.NewMakeCollection(
 			authorizer,
 			UuidToUint128OrQuit(collectionZswId),

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,7 +72,7 @@ func getRandUUID() string {
 
 func RunDebugScenarioC(ctx context.Context, authorizer zsw.AccountName, newKexinJiedian zsw.AccountName) (error, string) {
 
-	api := zsw.New("https://node3.tn1.chao7.cn")
+	api := zsw.New(os.Getenv("ZSW_API_URL"))
 	api.Debug = true
 
 	keyBag := &zsw.KeyBag{}
@@ -85,7 +86,7 @@ func RunDebugScenarioC(ctx context.Context, authorizer zsw.AccountName, newKexin
 	itemTemplateZswId := uuid.New().String()
 	itemZswId := uuid.New().String()
 
-	kxjdPrivateKey, err := ecc.NewPrivateKey("PVT_GM_E23jvM1z35D4UxfYTmWLS9ButJwXJ13zHuZwvUjpxwqEVQLPX")
+	kxjdPrivateKey, err := ecc.NewPrivateKey(os.Getenv("KEXIN_JIEDIAN_A_PRIVATE_KEY"))
 	if err != nil {
 		return err, ""
 	}
@@ -132,19 +133,23 @@ func RunDebugScenarioC(ctx context.Context, authorizer zsw.AccountName, newKexin
 		zsw.NewZSWAsset(0),
 		zsw.NewZSWAsset(0),
 	)...)
-	actions = append(actions, GetActionsSetupKexinJiedianPermissions(
+	runTxBasic(context.Background(), api, actions)
+
+	time.Sleep(time.Second * 2)
+	actions2 := []*zsw.Action{}
+	actions2 = append(actions2, GetActionsSetupKexinJiedianPermissions(
 		authorizer,
 		newKexinJiedian,
 		kexinJiedianZswId,
 	)...)
-	runTxBasic(context.Background(), api, actions)
+	runTxBasic(context.Background(), api, actions2)
 	time.Sleep(time.Second * 2)
-	actions = GetCreateExampleCollection(
+	actions2 = GetCreateExampleCollection(
 		authorizer,
 		newKexinJiedian,
 		collectionZswId,
 	)
-	actions = append(actions, GetActionsCreateExampleCollectionItemFlow1155(
+	actions2 = append(actions2, GetActionsCreateExampleCollectionItemFlow1155(
 		authorizer,
 		newKexinJiedian,
 		collectionZswId,
@@ -172,10 +177,10 @@ func RunDebugScenarioC(ctx context.Context, authorizer zsw.AccountName, newKexin
 			"An item for you 2!",
 		),
 	}
-	actions = append(actions, mintActions...)
+	actions2 = append(actions2, mintActions...)
 
 	//actions = append(actions, mintActions...)
 
-	return nil, runTxBasic(context.Background(), api, actions)
+	return nil, runTxBasic(context.Background(), api, actions2)
 
 }
